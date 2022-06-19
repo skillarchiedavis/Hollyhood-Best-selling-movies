@@ -1,2 +1,2 @@
 # Hollyhood-Best-selling-movies
-Python programming used to clean, transform and analyze Sales department data and creation of machine learning models to make recommendation to customers base off their purchase.
+R programming used to clean, transform and analyze Hoolyhood Movies sales and creation of a linear regession model to predict sales. A dashboard was then created in Power BI to visualize. Afterwards, I created a PowerPoint document to present my findings.

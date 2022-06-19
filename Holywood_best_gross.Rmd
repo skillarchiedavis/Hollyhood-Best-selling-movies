@@ -1,0 +1,577 @@
+---
+title: "Hollywood_Highest_Gross_Movies"
+author: "Skillarchie Davis"
+date: '2022-05-02'
+output:
+  html_document:
+    df_print: paged
+  pdf_document: default
+---
+
+
+## The libraries necessary for data cleaning
+```{r}
+# text mining library
+library(tidyverse)
+library(lubridate)
+library('pracma')
+library(tm)
+library(corrplot)
+library(reshape2)
+library("tm")
+library(syuzhet)
+library(plotly)
+```
+
+```{r}
+library(readr)
+library(syuzhet)
+library(plotly)
+library(tm)
+library(dplyr)
+library(tidyr)
+library(tidyverse)
+library(ggplot2)
+library(tidytext)
+library(tm)
+library(corrplot)
+library(reshape2)
+library("tm")
+library("SnowballC")
+library("wordcloud")
+library("RColorBrewer")
+```
+
+## Data Preprocessing
+
+### Loading in the dataset
+```{r}
+Movies <- read_csv("C:/Users/skill/Desktop/Highest Holywood Grossing Movies.csv")
+```
+
+### Step 1: Initial Exploratory Analysis
+```{r}
+Movies_clean <- Movies
+```
+
+```{r}
+dim(Movies_clean)
+```
+
+
+```{r}
+head(Movies_clean)
+```
+
+
+```{r}
+glimpse(Movies_clean)
+```
+
+### Delete Columns that won't help with analysis.
+```{r}
+Movies_clean$...1 <- Movies_clean$`Movie Info` <- Movies_clean$`Movie Runtime` <- NULL
+```
+
+```{r}
+glimpse(Movies_clean)
+```
+
+```{r}
+Movies_clean$Genre[1:5]
+```
+
+
+```{r}
+# Rename columns Domestic.Sales..in...
+Movies_clean <- rename(Movies_clean, c("Domestic_Sales" =`Domestic Sales (in $)`, "International_Sales" = `International Sales (in $)`, "World_Sales" = `World Sales (in $)`))
+```
+
+```{r}
+colnames(Movies_clean[4:6]) 
+```
+
+```{r}
+# Divide sale by 1 million for better readability
+Movies_clean$Domestic_Sales <- ceil(Movies_clean$Domestic_Sales / 1000000)
+Movies_clean$International_Sales <- ceil(Movies_clean$International_Sales / 1000000)
+Movies_clean$World_Sales <- ceil(Movies_clean$World_Sales / 1000000)
+```
+
+
+```{r}
+head(Movies_clean[4:6])
+```
+
+
+```{r}
+# Checking for duplicate movie names
+any(duplicated(Movies_clean$Title))
+```
+
+
+### Summary Statistics for all the columns of the data frame
+```{r}
+summary(Movies_clean[4:6])
+```
+
+### Step 2: Visual Exploratory Analysis
+```{r}
+hist(Movies_clean$Domestic_Sales)
+hist(Movies_clean$International_Sales)
+hist(Movies_clean$World_Sales)
+```
+
+
+```{r}
+boxplot(Movies_clean$Domestic_Sales)
+boxplot(Movies_clean$International_Sales)
+boxplot(Movies_clean$World_Sales)
+```
+
+### Checking for NA's
+```{r}
+any(is.na(Movies_clean))
+```
+
+```{r}
+apply(Movies_clean, 2,function(x) sum(is.na(x)))
+```
+
+```{r}
+unique(Movies_clean$License)
+```
+
+### Step 3: Correcting the errors!
+```{r}
+Movies_clean <- Movies_clean %>% 
+                mutate(License = replace_na(License, "Not Rated"))
+```
+
+### Working with strings
+```{r}
+# Trim columns with character datatype
+Movies_clean$Title <- str_trim(Movies_clean$Title)
+Movies_clean$Distributor <- str_trim(Movies_clean$Distributor)
+Movies_clean$Genre <- str_trim(Movies_clean$Genre)
+Movies_clean$License <- str_trim(Movies_clean$License)
+```
+
+
+```{r}
+unique(Movies_clean$License)
+```
+
+## Data Transformation
+
+### Working with dates
+```{r}
+# Getting the Year the movie was release from the title
+Movies_clean$Years <- str_sub(Movies_clean$Title,start = -5, end = -2)
+```
+
+```{r}
+any(is.na(Movies_clean$Years))
+```
+
+
+```{r}
+head(Movies_clean$Years)
+```
+
+```{r}
+Movies_clean$Date <- mdy(Movies_clean$`Release Date`)
+```
+
+
+```{r}
+## First make up some mock data
+my_data <- data.frame(date = seq(as.Date("2010-01-01"), as.Date("2015-12-31"), 
+                                by = "1 month"), 
+                     value = rnorm(72))
+
+## Remove some observations so we have an incomplete data set
+my_incomplete_data <- my_data[sort(sample(nrow(my_data), 60)), ]
+```
+
+
+
+```{r}
+# Filling missing dates with the sample dates
+Movies_clean$Date [is.na(Movies_clean$Date)] <- seq(min(my_incomplete_data$date), max(my_incomplete_data$date), 
+                  by = "3 month")
+```
+
+
+```{r}
+any(is.na(Movies_clean$Date))
+```
+
+
+```{r}
+# Extracting months from dates
+#Movies_clean$Months <-months(Movies_clean$Date, abbreviate = TRUE)
+#https://epirhandbook.com/en/working-with-dates.html
+#months(Movies_clean$Date, abbreviate = TRUE)
+Movies_clean$Months <- format(Movies_clean$Date, format = "%b")
+Movies_clean$Months <- factor(Movies_clean$Months, levels = month.abb)
+```
+
+
+```{r}
+head(Movies_clean$Months)
+```
+
+
+```{r}
+# Extracting days of the week from dates
+Days <- c("Sunday", "Monday","Tuesday", "Wednesday", "Thursday", "Friday", "Saturday")
+Movies_clean$Day_of_Week <- weekdays(Movies_clean$Date)
+Movies_clean$Day_of_Week <- factor(Movies_clean$Day_of_Week, levels = Days)
+```
+
+```{r}
+head(Movies_clean$Day_of_Week)
+```
+
+
+```{r}
+# Drop the release date column 
+Movies_clean$`Release Date` <- NULL
+```
+
+# Data Analysis
+
+```{r}
+Movies_Analysis <- Movies_clean
+```
+
+### The total movie sales by license type
+```{r}
+Movies_Analysis %>% group_by(License) %>% summarise(Movie_Amount = n_distinct(Title),
+                                                 Domestic = sum(Domestic_Sales),
+                                                 International =sum(International_Sales),
+                                                 World = sum(World_Sales))
+```
+
+### The median of movie sales by license type
+```{r}
+Movies_Analysis %>% group_by(License) %>% summarise(Movie_Amount = n_distinct(Title),
+                                                 Domestic = median(Domestic_Sales),
+                                                 International =median(International_Sales),
+                                                 World = median(World_Sales))
+```
+
+
+
+### The total movie sales by Distributor
+```{r}
+df <- Movies_Analysis %>% group_by(Distributor) %>% summarise(Movie_Amount = n_distinct(Title),
+                                                 Domestic = sum(Domestic_Sales),
+                                                 International =sum(International_Sales),
+                                                 World = sum(World_Sales))
+df[order(df$Movie_Amount, decreasing = TRUE),]
+```
+
+### The median of movie sales by Distributor
+```{r}
+df <- Movies_Analysis %>% group_by(Distributor) %>% summarise(Movie_Amount = n_distinct(Title),
+                                                 Domestic = median(Domestic_Sales),
+                                                 International =median(International_Sales),
+                                                 World = median(World_Sales))
+df[order(df$World, decreasing = TRUE),]
+```
+
+
+### Top ten film by world sales
+```{r}
+Movies_Analysis %>% group_by(Title) %>% summarise(Domestic = sum(Domestic_Sales),
+                                                 International =sum(International_Sales),
+                                                 World = sum(World_Sales)) %>% top_n(10,World)
+```
+
+### The total movie sales by Years
+```{r}
+Movies_Analysis %>% group_by(Years) %>% summarise(  Movie_Amount = n_distinct(Title),
+                                                 Domestic = sum(Domestic_Sales),
+                                                 International =sum(International_Sales),
+                                                 World = sum(World_Sales)) %>% top_n(11,World)
+```
+
+### The total movie sales by Months
+```{r}
+Movies_Analysis %>% group_by(Months) %>% summarise( Movie_Amount = n_distinct(Title),
+                                                 Domestic = sum(Domestic_Sales),
+                                                 International =sum(International_Sales),
+                                                 World = sum(World_Sales)) 
+```
+
+### The total movie sales by Weekday
+```{r}
+Movies_Analysis %>% group_by(Day_of_Week) %>% summarise(Movie_Amount = n_distinct(Title),
+                                                 Domestic = sum(Domestic_Sales),
+                                                 International =sum(International_Sales),
+                                                 World = sum(World_Sales)) 
+```
+
+### Best selling movie
+```{r}
+Movies_Analysis %>% filter(Movies_Analysis$Domestic_Sales == max(Movies_Analysis$Domestic_Sales)) #%>% select(Title,Genre)
+```
+
+### Least selling movies
+```{r}
+Movies_Analysis %>% filter(Movies_Analysis$Domestic_Sales == min(Movies_Analysis$Domestic_Sales)) #%>% select(Title,Genre)
+```
+
+
+## Deep dive analysis
+```{r}
+analysis_dive <-Movies_Analysis %>% filter(Years %in% c(2017,2018,2019))
+```
+
+
+### The total movie sales by license type
+```{r}
+analysis_dive %>% group_by(License) %>% summarise(Movie_Amount = n_distinct(Title),
+                                                 Domestic = sum(Domestic_Sales),
+                                                 International =sum(International_Sales),
+                                                 World = sum(World_Sales))
+```
+
+### The total number of movies by license group by distributors
+```{r}
+analysis_dive %>% group_by(Distributor,License) %>% summarise(Movie_Amount = n_distinct(Title),
+                                                              Domestic = sum(Domestic_Sales)
+                                                              ,.groups = 'drop')
+```
+
+### The total movie sales by top ten Distributor
+```{r}
+df <- analysis_dive %>% group_by(Distributor) %>% summarise(Movie_Amount = n_distinct(Title),
+                                                 Domestic = sum(Domestic_Sales),
+                                                 International =sum(International_Sales),
+                                                 World = sum(World_Sales)) %>% top_n(10,World)
+df[order(df$Movie_Amount,decreasing = TRUE),]
+```
+
+
+### Top ten films by world sales
+```{r}
+analysis_dive %>% group_by(Title) %>% summarise(Domestic = sum(Domestic_Sales),
+                                                 International =sum(International_Sales),
+                                                 World = sum(World_Sales)) %>% top_n(10,World)
+```
+
+### The total movie sales by Years
+```{r}
+analysis_dive %>% group_by(Years) %>% summarise(  Movie_Amount = n_distinct(Title),
+                                                 Domestic = sum(Domestic_Sales),
+                                                 International =sum(International_Sales),
+                                                 World = sum(World_Sales)) %>% top_n(11,World)
+```
+
+### The total movie sales by Months
+```{r}
+analysis_dive %>% group_by(Months) %>% summarise( Movie_Amount = n_distinct(Title),
+                                                 Domestic = sum(Domestic_Sales),
+                                                 International =sum(International_Sales),
+                                                 World = sum(World_Sales)) 
+```
+
+### The total movie sales by Weekday
+```{r}
+analysis_dive %>% group_by(Day_of_Week) %>% summarise(Movie_Amount = n_distinct(Title),
+                                                 Domestic = sum(Domestic_Sales),
+                                                 International =sum(International_Sales),
+                                                 World = sum(World_Sales)) 
+```
+
+### Best selling movie
+```{r}
+analysis_dive %>% filter(Domestic_Sales == max(Domestic_Sales)) #%>% select(Title,Genre)
+```
+
+### Least selling movies
+```{r}
+analysis_dive %>% filter(Domestic_Sales == min(Domestic_Sales)) #%>% select(Title,Genre)
+```
+
+
+## Data Visualization
+```{r}
+movie_viz <- Movies_Analysis %>% filter(Years %in% c(2014,2015,2017,2018,2019))
+```
+
+
+```{r}
+movie_viz %>% group_by(License) %>% summarise(Domestic = sum(Domestic_Sales)) %>% 
+  ggplot(aes(x =License, y = Domestic, fill = License)) +
+  labs(title = "Total Domestic Sales by license in Millions", x = "License", y = "Sales")+geom_col(position = "dodge")
+```
+```{r}
+movie_viz %>% group_by(Day_of_Week) %>% summarise(Domestic = sum(Domestic_Sales)) %>% 
+  ggplot(aes(x =Day_of_Week, y = Domestic, fill = Day_of_Week)) +
+  labs(title = "Total Domestic Sales by Weekday in Millions ", x = "Week Days", y = "Sales")+geom_col(position = "dodge", show.legend = FALSE)
+```
+
+```{r}
+movie_viz %>% group_by(Months) %>% summarise(Domestic = sum(Domestic_Sales)) %>% 
+  ggplot(aes(x =Months, y = Domestic, fill = Months)) +
+  labs(title = "Total Domestic Sales by Months in Millions", x = "Months", y = "Sales")+geom_col(position = "dodge")
+```
+
+
+
+```{r}
+movie_viz %>% group_by(Years) %>% summarise(Domestic = sum(Domestic_Sales)) %>%
+plot(type="l",col="blue", xlab = 'Years', ylab = 'Sales', main = 'Total Domestic Sales by Years in Millions')
+```
+
+
+
+
+```{r}
+movie_viz <-subset(movie_viz, Date > '2010-12-31')
+```
+
+```{r}
+year <-format(movie_viz$Date, format = "%Y")
+```
+
+```{r}
+fig <- plot_ly(data = movie_viz, x = ~Date, y = ~Domestic_Sales, color = year,
+               type = 'scatter', mode = 'markers', size = ~Domestic_Sales,fill = ~'',
+marker = list(sizemode = 'diameter')) 
+
+fig %>% layout(title = 'Total Domestic Sales by Years and Months in Millions',
+         showlegend = FALSE)
+```
+
+
+```{r}
+i <- movie_viz %>% group_by(Distributor) %>% summarise(Domestic = sum(Domestic_Sales)) %>% top_n(10,Domestic)
+ggplot(i,aes(x = Domestic, y = fct_rev(Distributor), fill = Distributor)) +  theme_minimal()+
+labs(title = "Total Domestic Sales by Distributors in Millions ", x = "Distributors", y = "Sales")+geom_col(position = "dodge",show.legend = FALSE)
+```
+
+
+
+
+
+
+
+## Linear Regression Model
+
+### Searching for distributors that has less than 3 movies ad remove them.
+```{r}
+Movie_LM <-subset(Movies_Analysis, Years > '1999')
+modelrdy <- Movie_LM %>% group_by(Distributor) %>% summarise(Amount = n_distinct(Title)) 
+modelrdy[order(modelrdy$Amount,decreasing = FALSE),]
+```
+
+```{r}
+weird <- c("FilmDistrict",
+"Focus Features",
+"20th Century Studios",
+"IFC Films",	
+"Newmarket Films",
+"Relativity Media",
+"Roadside Attractions",
+"Sony Pictures Classics",
+"United Artists",
+"United Artists Releasing",
+"USA Films")
+```
+
+
+
+```{r}
+`%!in%` <- Negate(`%in%`)
+```
+
+```{r}
+Regression <- Movie_LM %>% filter(Distributor %!in% weird)
+testing <- Regression %>% select(Distributor,International_Sales,World_Sales,Years,Domestic_Sales)
+```
+
+
+```{r}
+set.seed(1)
+train <- sample(1:nrow(testing),nrow(testing)*0.8)
+train_data <- testing[train,]
+test_data <- testing[-train,]
+
+result <- lm(Domestic_Sales ~Distributor+International_Sales+World_Sales+Years, data=train_data)
+
+test_data$PredictDomesticSales <- predict(result,test_data[,1:5])
+
+```
+
+
+```{r}
+summary(result)
+```
+
+
+```{r}
+summary(test_data)
+```
+```{r}
+#create fitted value vs residual plot
+plot(fitted(result), residuals(result))
+
+#add horizontal line at 0
+abline(h = 0, lty = 2)
+```
+
+```{r}
+hist(residuals(result), col = "steelblue")
+```
+
+
+```{r}
+test_data$PredictDomesticSales <- predict(result,test_data[,1:4])
+```
+
+```{r}
+predict(result,newdata = test_data,interval = 'confidence')
+```
+
+### Checking for correlation.
+```{r}
+cor(test_data$Domestic_Sales,test_data$PredictDomesticSales)
+```
+
+
+```{r}
+line = list(color = "blue")
+plot_ly(test_data, x = ~Domestic_Sales, y = ~PredictDomesticSales) %>%
+  add_markers(color = ~line) %>%
+  layout(xaxis=list(title=""), showlegend=FALSE,
+         title="Visualisation of the predicted Domestic Sales and Domestic Sales")
+```
+
+
+
+
+
+```{r}
+#write.csv(Movies_Analysis, 'C:\\Users\\Skill\\Desktop\\viz.csv')
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
